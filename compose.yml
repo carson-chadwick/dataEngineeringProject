@@ -1,0 +1,160 @@
+services:
+
+  # =========================================================================
+  # Milestone 1: Data Sources and ETL
+  # =========================================================================
+
+  # NoSQL Database for storing unstructured chat logs
+  mongo:
+    container_name: mongo
+    image: mongo:latest
+    volumes:
+      # Persistent volume ensures chat logs aren't lost on 'docker compose down'
+      - mongo_data:/data/db
+    restart: on-failure
+    ports:
+      - "27017:27017"
+    healthcheck:
+      # Pings the DB to ensure it's ready to accept connections before the generator starts
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    command: ["mongod", "--quiet"]
+
+  # Web-based GUI for managing PostgreSQL and MongoDB (accessible at localhost:8080)
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: on-failure
+    ports:
+      - 8080:8080
+
+  # Relational Database for orders and metadata (watermarks)
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: transactions
+    volumes:
+      # Persistent storage for order data and ETL watermarks
+      - postgres_data:/var/lib/postgresql/data
+      # Initialization script to set up tables/schema on first startup
+      - ./processor/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # Ensures the database is fully initialized and "transactions" DB exists
+      test: [ "CMD", "pg_isready", "-q", "-d", "transactions", "-U", "postgres" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Simulated source: Mimics real-time order and chat creation
+  generator:
+    image: davidwilson175/adventure-generator
+    container_name: generator
+    environment:
+      - GENERATION_INTERVAL_SEC=10
+      - ORDER_BATCH_SIZE=100
+      - GENERATION_MAX_RUNTIME_SEC=3600
+      - PYTHONUNBUFFERED=1 # Ensures logs appear in real-time
+    depends_on:
+      # Won't start until databases are actually healthy/ready
+      mongo:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  # Your custom ETL engine: Extracts from local postgres and mongo and loads to Snowflake
+  processor:
+    build: processor/. # Builds from the local /processor directory
+    env_file:
+      - ./processor/.env.docker # Loads Snowflake credentials and watermarks
+    container_name: processor
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      mongo:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    # Uses 'uv' for fast python package management to run main.py
+    command: ["uv", "run", "python", "main.py", "--env", ".env.docker"]
+
+  # =========================================================================
+  # Milestone 2: Prefect Orchestration
+  # =========================================================================
+
+  # The central command hub and database that provides the UI and API for scheduling, monitoring, and managing the state of all data flows.
+  prefect-server:
+    image: prefecthq/prefect:2-latest
+    container_name: prefect-server
+    ports:
+      - "4200:4200"
+    environment:
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    command: ["prefect", "server", "start"]
+    healthcheck:
+      # Validates the API is up before the worker or flow tries to register
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: on-failure
+
+  # TA lightweight polling agent that listens for instructions from the server and manages the actual infrastructure needed to execute a specific run.
+  prefect-worker:
+    image: prefecthq/prefect:2-latest
+    container_name: prefect-worker
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    command: ["prefect", "worker", "start", "-n", "is566-worker", "--pool", "is566-pool", "--type", "process"]
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    restart: on-failure
+
+  # The container responsible for registering your custom Python ETL logic (the "mission") with the server so it knows how to pull data from the Fly.dev API.
+  web-analytics-flow:
+    build: ./prefect
+    container_name: web-analytics-flow
+    env_file:
+      - ./processor/.env.docker
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    restart: on-failure
+
+  # =========================================================================
+  # Milestone 3: dbt MCP Server
+  # =========================================================================
+
+  # Enables AI/LLM tools to interact with your dbt project metadata/lineage. Model context protocol
+  dbt-mcp:
+    build: ./dbt
+    container_name: dbt-mcp
+    env_file:
+      - ./processor/.env.docker
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_TRANSPORT=sse
+      - DBT_PROJECT_DIR=.
+      - DBT_PROFILES_DIR=.
+      - FASTMCP_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+    restart: on-failure
+
+# Named volumes: These survive 'docker compose down' to prevent data loss
+volumes:
+  mongo_data:
+  postgres_data:
