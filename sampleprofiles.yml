@@ -1,0 +1,18 @@
+# Purpose: This file defines the connection profiles for dbt to communicate with Snowflake.
+# Role: It uses environment variables to securely manage warehouse, database, and authentication credentials.
+
+adventure-ops:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      # Environment variables are used for security and portability across environments
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      schema: dbt_dev
+      # Number of parallel threads for concurrent model execution
+      threads: 4
