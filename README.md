@@ -94,14 +94,17 @@ See `.env.sample` for the full list.
 ## Project Milestones
 
 ### Milestone 1: Core Pipeline
-Milestone 1 established the foundation of the data platform by implementing a custom Python ETL processor to extract transactional data from PostgreSQL (orders, order details) and support logs from MongoDB (chat logs) using watermarking logic. You developed 5 staging models, including stg_adventure_db__customers, stg_adventure_db__products, and stg_real_time__chat_logs, alongside 3 intermediate models such as int_sales_orders_with_customers to join disparate sources. Data quality was enforced through the implementation of standard dbt tests for uniqueness and nullity, plus custom logic to ensure integrity across the pipeline.
+
+In Milestone 1, I established the foundation of the data platform by implementing a custom Python ETL processor to extract transactional data from PostgreSQL (orders and order details) and support logs from MongoDB (chat logs) using watermarking logic. I developed 5 staging models, including `stg_adventure_db__customers`, `stg_adventure_db__products`, and `stg_real_time__chat_logs`, along with 3 intermediate models, such as `int_sales_orders_with_customers`, to join data from disparate sources. I also enforced data quality by implementing standard dbt tests for uniqueness and nullity, as well as custom logic to ensure integrity across the pipeline.
 
 ### Milestone 2: Orchestration, Quality, and Agent-Assisted Development
-Milestone 2 introduced professional orchestration by deploying Prefect to manage the new web_analytics_flow, which ingests clickstream data from a REST API into Snowflake. This phase expanded the transformation layer with 2 new web analytics models—stg_web_analytics and int_web_analytics_with_customers—and integrated dbt Cloud for automated execution. Quality control was enhanced with source freshness checks and row-count minimum tests, while data visibility was finalized through the creation of granular Snowflake dashboards.
+
+In Milestone 2, I introduced professional orchestration by deploying Prefect to manage the new `web_analytics_flow`, which ingests clickstream data from a REST API into Snowflake. I expanded the transformation layer with 2 new web analytics models—`stg_web_analytics` and `int_web_analytics_with_customers`—and integrated dbt Cloud for automated execution. I enhanced quality control by adding source freshness checks and row-count minimum tests, and improved data visibility by creating granular Snowflake dashboards.
 
 ### Milestone 3: Agent Access and Portfolio
-Milestone 3 focused on enabling AI interaction through the deployment of a dbt MCP server, which utilizes a custom start_mcp.py wrapper to expose warehouse models as tools for AI agents. You finalized the project portfolio by upgrading documentation in the README.md and technical_decisions.md and verified the system using a Python demo client to test agentic reasoning over the data. The project concluded with a comprehensive cleanup of the repository and the finalization of the architectural diagram to reflect the complete end-to-end flow.
----
+
+In Milestone 3, I enabled AI interaction by deploying a dbt MCP server and using a custom `start_mcp.py` wrapper to expose warehouse models as tools for AI agents. I finalized the project portfolio by upgrading the documentation in `README.md` and `technical_decisions.md`, and I verified the system with a Python demo client that tested agentic reasoning over the data. I concluded the project by cleaning up the repository and finalizing the architectural diagram to reflect the complete end-to-end data flow.
+
 
 ## Key Metrics
 
