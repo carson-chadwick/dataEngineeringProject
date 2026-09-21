@@ -1,0 +1,89 @@
+# Purpose: Source definition and freshness requirements for raw web analytics data.
+# Role: It defines the connection to the storefront clickstream data and sets observability thresholds for ingestion latency.
+# With source(), dbt can run source freshness checks to alert you when raw data stops arriving
+# Using source() instead of raw table references gives you data lineage tracing all the way back to the source
+# Centralized: if the raw table moves schemas, you update sources.yml in one place instead of every SQL file
+# Tests can be applied to sources just like models (not_null, unique, accepted_values, relationships)
+
+version: 2
+
+sources:
+  - name: web_analytics_source
+    description: >
+      Raw clickstream and web interaction data captured from the storefront application.
+      Data is ingested as JSON/CSV files into Snowflake via a Prefect orchestration pipeline.
+      Used for tracking user behavior, session analysis, and conversion funnels.
+    database: BULLFROG_DB
+    schema: RAW_EXT
+
+    config:
+      loaded_at_field: EVENT_TIMESTAMP
+      # Alerts if data ingestion falls behind schedule. dbt source freshness runs a MAX(event_timestamp) query on the raw table and compares to current time
+      freshness:
+      #  if no new events in 12 hours, dbt run warns but doesn't fail
+        warn_after: { count: 12, period: hour }
+        # if no new events in 24 hours, dbt treats source as stale and errors
+        error_after: { count: 24, period: hour }
+    
+
+    tables:
+      - name: web_analytics_raw
+        description: >
+          Raw web event data (clicks, page views, purchases) captured from the storefront.
+          Grain: one row per user interaction event.
+        columns:
+          - name: CUSTOMER_ID
+            description: >
+              Unique identifier for the customer who performed the action. 
+              Foreign key to stg_adventure_db__customers.customer_id.
+              Links web behavior to core customer profiles.
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: ref('stg_adventure_db__customers')
+                    field: customer_id
+
+          - name: SESSION_ID
+            description: "Unique identifier for the browsing session. Group events by this ID to reconstruct user journeys."
+            data_tests:
+              - not_null
+
+          - name: PAGE_URL
+            description: "The full URL of the page where the event was captured (e.g., /products/123)."
+            data_tests:
+              - not_null
+
+          - name: EVENT_TYPE
+            description: >
+              The type of action taken. 
+              Values: 'page_view', 'click', 'purchase', 'add_to_cart'.
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: ["page_view", "click", "purchase", "add_to_cart"]
+
+          - name: EVENT_TIMESTAMP
+            description: "The UTC timestamp when the event occurred on the website storefront."
+            data_tests:
+              - not_null
+
+          # Metadata Columns
+          - name: _LOADED_AT
+            description: "The timestamp when this row was loaded into Snowflake by the Prefect pipeline. Used for incremental loading."
+            data_tests:
+              - not_null
+
+          - name: _FILE_NAME
+            description: "The name of the source file in the S3/internal stage that provided this record. Useful for debugging ingestion issues."
+            data_tests:
+            
+              - not_null
+          - name: PRODUCT_ID
+            description: >
+              The identifier of the product the user interacted with. 
+              Foreign key to stg_adventure_db__products.product_id.
+            data_tests:
+              - not_null
+          

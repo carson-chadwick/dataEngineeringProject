@@ -1,0 +1,44 @@
+# Purpose: Documentation and test definitions for the staged web analytics model.
+# Role: It ensures that the initial layer of clickstream data is accurate, normalized, and well-documented for downstream consumers.
+
+version: 2
+
+models:
+  - name: stg_web_analytics
+    description: >
+      Staged web analytics events from the web_analytics_source. 
+      This model applies basic cleaning, casts data types, and normalizes timestamps to UTC.
+      Each row represents a single user interaction event on the storefront.
+      Grain: one row per web event.
+    columns:
+      - name: customer_id
+        description: >
+          Identifier for the customer. Foreign key to stg_adventure_db__customers.customer_id.
+          Can be used to join web behavior with customer demographic data.
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: >
+          The identifier for the product featured in the web event. 
+          Foreign key to stg_adventure_db__products.product_id.
+        data_tests:
+          - not_null
+
+      - name: session_id
+        description: "Unique identifier for the web browsing session. Essential for sessionization and funnel analysis."
+        data_tests:
+          - not_null
+
+      - name: event_at
+        description: "The UTC timestamp of the web event. This is the primary time-based column for web analytics."
+        data_tests:
+          - not_null
+
+      - name: event_type
+        description: >
+          The type of user action captured.
+          Common values: 'page_view', 'click', 'add_to_cart', 'purchase'.
+
+      - name: dbt_loaded_at
+        description: "Metadata: The UTC timestamp when this model was built by dbt. Used for audit trails."

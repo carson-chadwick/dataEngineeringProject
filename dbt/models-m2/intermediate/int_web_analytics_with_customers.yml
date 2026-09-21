@@ -1,0 +1,45 @@
+# Purpose: Documentation and test definitions for the web analytics customer enrichment model.
+# Role: It ensures data integrity and provides business context for the joined web behavior and customer profile dataset.
+
+version: 2
+
+models:
+  - name: int_web_analytics_with_customers
+    description: >
+      Enriches web clickstream events with customer demographic and geographic data.
+      This intermediate model joins web events from stg_web_analytics with customer records 
+      from stg_adventure_db__customers.
+      Grain: one row per web interaction event.
+      Enables analysis of user behavior by customer segments (e.g., location, account type).
+    columns:
+      - name: customer_id
+        description: >
+          The identifier for the customer, sourced from web analytics.
+          Foreign key to stg_adventure_db__customers.customer_id.
+        data_tests:
+          - not_null
+
+      - name: session_id
+        description: "Unique identifier for the web browsing session. Group by this for session-level metrics."
+        data_tests:
+          - not_null
+
+      - name: country_region
+        description: "The country or region of the customer, joined from the customer dimension for geographic segmentation."
+        
+      - name: event_at
+        description: "The UTC timestamp of the web event. Primary date/time for trend analysis."
+        data_tests:
+          - not_null
+
+      - name: customer_full_name
+        description: "The full name of the customer, joined from stg_adventure_db__customers."
+
+      - name: email_address
+        description: "The customer's primary email address."
+
+      - name: city
+        description: "The city where the customer is located, joined from the customer dimension."
+
+      - name: event_type
+        description: "The action the customer performed (e.g., page_view, add_to_cart)."

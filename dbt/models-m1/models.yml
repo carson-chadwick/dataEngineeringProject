@@ -1,0 +1,153 @@
+# Purpose: Documentation and data test definitions for all M1 models.
+# Role: It serves as the single source of truth for the schema, business definitions, and quality rules for the m1 pipeline.
+
+version: 2
+
+models:
+  # --- STAGING MODELS: ADVENTURE_DB (Legacy relational data) ---
+  - name: stg_adventure_db__customers
+    description: >
+      Staged customer profile data from the legacy AdventureWorks database.
+      Each row represents a single customer. Grain: one row per customer.
+      This model applies basic cleaning and type casting to raw customer records.
+      Used as a primary dimension for customer-related analysis across the warehouse.
+    columns:
+      - name: customer_id
+        description: Unique identifier for the customer. Primary key. Foreign key for many sales and interaction models.
+        data_tests:
+          - unique
+          - not_null
+      - name: first_name
+        description: The customer's first name.
+        data_tests:
+          - not_null
+      - name: email_address
+        description: Primary email address for the customer. Used for marketing and support identification.
+      - name: city
+        description: City where the customer is located.
+      - name: state_province
+        description: State or province of the customer's primary address.
+
+  - name: stg_adventure_db__inventory
+    description: >
+      Staged inventory data from AdventureWorks.
+      Each row represents a product's stock level at a specific location.
+      Grain: one row per product per location.
+      Used for supply chain and availability reporting.
+    columns:
+      - name: product_id
+        description: Identifier for the product. Foreign key to stg_adventure_db__products.
+      - name: quantity
+        description: Current quantity on hand for the product at the specified location.
+
+  - name: stg_adventure_db__vendors
+    description: >
+      Staged vendor information from AdventureWorks.
+      Each row represents a third-party supplier. Grain: one row per vendor.
+    columns:
+      - name: vendor_id
+        description: Unique identifier for the vendor. Primary key.
+
+  - name: stg_adventure_db__products
+    description: >
+      Staged product master data from AdventureWorks.
+      Each row represents a single product in the catalog. Grain: one row per product.
+      Contains pricing, categorization, and metadata.
+    columns:
+      - name: product_id
+        description: Unique identifier for the product. Primary key.
+
+  # --- STAGING MODELS: ECOM (Legacy semi-structured data) ---
+  - name: stg_ecom__email_campaigns
+    description: >
+      Unified staging model for email marketing events, combining legacy PostgreSQL data 
+      and modern event streams. Each row represents a marketing event (open, click, conversion).
+      Grain: one row per event. This model deduplicates events and handles campaign attribution.
+    columns:
+      - name: event_id
+        description: Unique identifier for the marketing event. Primary key.
+        data_tests:
+          - unique
+      - name: event_type
+        description: >
+          The type of marketing interaction.
+          Values: 'email_opened', 'add_to_cart', 'conversion', 'email_clicked'.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['email_opened','add_to_cart','conversion', 'email_clicked']
+      - name: campaign_id
+        description: >
+          Identifier for the marketing campaign. Composed of customer_segment, product_category, and ad_strategy.
+      - name: customer_id
+        description: Identifier of the customer who performed the event. Foreign key to stg_adventure_db__customers.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_adventure_db__customers')
+                field: customer_id
+      - name: order_id
+        description: >
+          The sales order ID associated with a conversion event. 
+          Foreign key to stg_ecom__sales_orders. Null if the event is not a conversion.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_ecom__sales_orders')
+                field: sales_order_id
+
+  - name: stg_ecom__sales_orders
+    description: >
+      Staged sales order data from the legacy PostgreSQL e-commerce system.
+      Each row represents a single order. Grain: one row per order.
+      Contains nested 'order_details' JSON which is flattened downstream in intermediate models.
+    columns:
+      - name: sales_order_id
+        description: Unique identifier for the sales order. Primary key.
+      - name: customer_id
+        description: Identifier of the customer who placed the order. Foreign key to stg_adventure_db__customers.
+
+  # --- STAGING MODELS: REAL-TIME (Dynamic event-driven data) ---
+  - name: stg_real_time__chat_logs
+    description: >
+      Staged customer support chat logs from the real-time MongoDB source.
+      Each row is one customer support chat session. Grain: one row per chat session.
+      Contains session metadata, ticket details, and CSAT scores.
+    columns:
+      - name: chat_id
+        description: Unique identifier for the chat session. Primary key.
+      - name: customer_id
+        description: Identifier of the customer who initiated the chat. Foreign key to stg_adventure_db__customers.
+      - name: sales_order_id
+        description: Optional sales order being discussed in the chat. Foreign key to stg_ecom__sales_orders.
+      - name: csat_score
+        description: Customer satisfaction rating (1-5) provided at the end of the session.
+
+  # --- INTERMEDIATE MODELS (Business logic and joins) ---
+  - name: int_sales_order_line_items
+    description: >
+      Intermediate model that flattens nested order details into individual line items.
+      Each row represents a single product within a sales order. Grain: one row per product per order.
+      Enables granular revenue and product performance analysis.
+    columns:
+      - name: sales_order_detail_id
+        description: Unique identifier for the line item. Primary key.
+      - name: sales_order_id
+        description: The parent order this line item belongs to. Foreign key to stg_ecom__sales_orders.
+      - name: product_id
+        description: The product purchased in this line item. Foreign key to stg_adventure_db__products.
+      - name: line_total
+        description: Total revenue for this line item (quantity * unit_price - discount).
+
+  - name: int_sales_orders_with_campaign
+    description: >
+      Enriches sales orders with marketing campaign attribution data.
+      Each row represents a sales order. Grain: one row per order.
+      Joins orders to 'conversion' events from stg_ecom__email_campaigns to identify campaign-driven sales.
+    columns:
+      - name: sales_order_id
+        description: Unique identifier for the sales order. Primary key.
+      - name: is_campaign_conversion
+        description: Boolean flag (1/0) indicating if the order was attributed to an email campaign conversion.
+      - name: campaign_id
+        description: The marketing campaign associated with the conversion. Foreign key to stg_ecom__email_campaigns.

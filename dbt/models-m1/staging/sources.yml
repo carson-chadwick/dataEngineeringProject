@@ -1,0 +1,74 @@
+# Purpose: Source definitions for all data ingested in the m1 pipeline.
+# Role: It acts as the interface between external databases (legacy, real-time, marketing) and the dbt transformation layer.
+# With source(), dbt can run source freshness checks to alert you when raw data stops arriving3
+# Using source() instead of raw table references gives you data lineage tracing all the way back to the source
+# Centralized: if the raw table moves schemas, you update sources.yml in one place instead of every SQL file
+# Tests can be applied to sources just like models (not_null, unique, accepted_values, relationships)
+
+version: 2
+
+sources:
+  # --- REAL-TIME DATA ---
+  - name: real_time_source 
+    description: >
+      Real-time sales and customer interaction data captured via a Node.js ETL processor.
+      Data is loaded into Snowflake from MongoDB (chat logs) and other event streams.
+      Updated frequently via watermark-based incremental loads.
+    database: BULLFROG_DB
+    schema: RAW_EXT
+    tables:
+      - name: orders_raw
+        description: Raw sales order data from the real-time event stream. Each row is one order.
+      - name: order_details_raw
+        description: Raw line item details for real-time orders. Grain one row per product per order.
+      - name: chat_logs_raw
+        description: >
+          Raw customer support chat logs from MongoDB. Each row is a single chat session.
+          Contains semi-structured JSON data with chat transcripts and ticket metadata.
+
+  # --- LEGACY ADVENTURE DATA ---
+  - name: adventure_db
+    description: >
+      Legacy business data from the AdventureWorks production database.
+      Contains core entities like customers, products, and inventory.
+      Source for many downstream dimension and staging models.
+    database: IS566             
+    schema: ADVENTURE_PROD_DB   
+    tables:
+      - name: inventory_prod_db
+        description: Snapshot of current product inventory levels across various locations.
+      - name: customer_prod_db
+        description: Core customer profile data including contact information and demographics.
+      - name: product_vendor_prod_db
+        description: Mapping between products and their respective vendors, including lead times.
+      - name: product_prod_db
+        description: Master catalog of all products sold, including prices and categories.
+      - name: vendor_prod_db
+        description: Information about third-party suppliers and manufacturers.
+
+  # --- MARKETING DATA ---
+  - name: ecom_source
+    description: >
+      Legacy e-commerce and marketing data from the PostgreSQL source system.
+      Includes historical email campaigns and sales orders.
+    database: IS566
+    schema: OLD_MKTG
+    tables:
+      - name: email_campaign_raw
+        description: Historical email marketing events (opens, clicks, conversions).
+      - name: purchase_order_raw
+        description: Historical purchase orders sent to vendors.
+      - name: sales_order_raw
+        description: Historical sales orders including nested JSON order details.
+
+  # --- NEW MARKETING DATA ---
+  - name: new_mktg
+    description: >
+      Modernized marketing event stream for recent email campaigns.
+      Follows the same schema as legacy marketing data but is updated via new pipelines.
+    database: IS566
+    # Conditional schema selection based on the execution target (dev vs prod)
+    schema: "{{ 'new_mktg_dev' if target.name == 'dev' else 'new_mktg_prod' }}"
+    tables:
+      - name: email_mktg_raw
+        description: Recent email marketing interaction events (opens, clicks, conversions).

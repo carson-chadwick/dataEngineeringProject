@@ -1,0 +1,38 @@
+# Purpose: This is the main configuration file for the dbt project.
+# Role: It defines project-wide settings, resource paths, and default materialization strategies for all models.
+
+# Name your project! 
+name: 'adventure'
+version: '1.0.0'
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'adventure-ops'
+
+# Directory configuration for all dbt resource types
+model-paths: ["models-m1", "models-m2"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Define directories to be removed by 'dbt clean'
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Global model configurations and materialization defaults
+models:
+  adventure:
+    # M1 and M2 staging models share this parent 'staging' config
+    staging:
+      # Default staging models to persistent tables for performance
+      +materialized: table
+      
+      # Explicitly targeting the subfolder for web_analytics
+      web_analytics:
+        +materialized: table
+        
+    # Intermediate models are views by default to maintain data freshness and reduce storage
+    intermediate:
+      +materialized: view
