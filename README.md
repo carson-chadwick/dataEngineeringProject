@@ -3,7 +3,7 @@ A complete data pipeline that utilizes Snowflake, dbt, and Prefect, allowing int
 
 ## Architecture
 
-For an architecture diagram see screenshots/architecture.png
+For an architecture diagram see architecture.png
 
 **Caption:** 
 The architecture features a modular data platform that integrates multiple sources—PostgreSQL, MongoDB, and a REST API—into a centralized Snowflake warehouse. Data ingestion is handled by a custom Python ETL processor and Prefect orchestration, which manages the transition from local files to Snowflake internal stages and eventually into raw tables. Once the data is in Snowflake, dbt performs structured transformations across staging and intermediate layers, which are then exposed to AI agents via an MCP server.
